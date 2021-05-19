@@ -57,10 +57,18 @@
                       priv: '*.*:ALL,GRANT'
                       host: 192.168.0.163
                       state: present
+           - name: install git
+             yum: name=git state=latest
+           - name: get code
+             git:
+               repo: 'https://github.com/kodekloudhub/learning-app-ecommerce.git'
+               dest: /tmp/project/
+               clone: yes
+               force: yes
 
 
             - name: add sample data to database  
-              copy: src=/tmp/db-load-script.sql dest=/tmp/db-load-script.sql  
+              copy: src=/tmp/project/assets/db-load-script.sql dest=/tmp/db-load-script.sql  
               when: db_created.changed
             - name: insert sample data into database  
               mysql_db: name=ecomdb state=import target=/tmp/db-load-script.sql login_user=root login_password={{ mysql_root_password }}
