@@ -1,0 +1,112 @@
+---
+        -
+          name: test project
+          hosts: all
+          remote_user: root
+          tasks:
+            - name: ensure firewall is installed 
+              yum: name=firewalld state=latest
+            - name:  start frewall
+              service: name=firewalld state=started  
+            - name: enable firewall service
+              ansible.builtin.service:
+                      name: firewalld
+                      state: started
+
+            - name: install maria
+              yum: name=mariadb-server state=latest
+            - name: start maria
+              service: name=mariadb state=started enabled=true
+            - name: add DB ports to fw rules
+              firewalld:
+                      port: 3306/tcp
+                      zone: public
+                      permanent: true
+                      state: enabled
+            - name: restart fw
+              systemd:
+                      name: firewalld
+                      state: reloaded
+            - name: pymysql
+              pip:
+                      name: pymysql
+                      state: present
+
+        -
+         name: db servers
+         hosts: db_servers
+         remote_user: root
+         tasks:
+            - name: create DB
+              mysql_db: name=ecomdb 
+                        state=present
+              register: db_created
+
+            - name: creat user
+              mysql_user:
+                      name: 'ecomuser'
+                      password: 'ecomppassword'
+                      priv: '*.*:ALL,GRANT'
+                      host: 192.168.0.100
+                      state: present
+
+            - name: creat user
+              mysql_user:
+                      name: 'ecomuser'
+                      password: 'ecomppassword'
+                      priv: '*.*:ALL,GRANT'
+                      host: 192.168.0.163
+                      state: present
+
+
+            - name: add sample data to database  
+              copy: src=/tmp/db-load-script.sql dest=/tmp/db-load-script.sql  
+              when: db_created.changed
+            - name: insert sample data into database  
+              mysql_db: name=ecomdb state=import target=/tmp/db-load-script.sql login_user=root login_password={{ mysql_root_password }}
+              when: db_created.changed
+
+        -
+         name: web server
+         hosts: web_servers
+         remote_user: root
+         tasks:
+           - name: ensure apache is at the latest version
+             yum: name=httpd state=latest
+           - name: install php
+             yum: name=php state=latest
+           - name: install php-mysqli
+             yum: name=php-mysqli state=latest
+           - name: add webserver ports to fw rules
+             firewalld:
+                      port: 80/tcp
+                      zone: public
+                      permanent: true
+                      state: enabled
+           - name: restart fw
+             systemd:
+                      name: firewalld
+                      state: reloaded
+           - name: install git
+             yum: name=git state=latest
+           - name: get code
+             git: 
+               repo: 'https://github.com/kodekloudhub/learning-app-ecommerce.git'
+               dest: /var/www/html/project/
+               clone: yes
+               force: yes
+           - name: amend httpd config
+             lineinfile:
+                     path: /etc/httpd/conf/httpd.conf
+                     regexp: 'DirectoryIndex index.html'
+                     line: 'DirectoryIndex index.php'
+           - name: set DB connection in php file
+             lineinfile:
+                     path: '/var/www/html/project/index.php'
+                     regexp: '\s*link = mysqli_connect*$'
+                     line: "$link = mysqli_connect('192.168.0.100', 'ecomuser', 'ecomppassword', 'ecomdb');"
+           - name: restart httpd
+             systemd:
+                      name: httpd
+                      state: reloaded
+
