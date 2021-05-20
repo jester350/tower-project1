@@ -57,10 +57,10 @@
                       priv: '*.*:ALL,GRANT'
                       host: 192.168.0.163
                       state: present
-           - name: install git
-             yum: name=git state=latest
-           - name: get code
-             git:
+            - name: install git
+              yum: name=git state=latest
+            - name: get code
+              git:
                repo: 'https://github.com/kodekloudhub/learning-app-ecommerce.git'
                dest: /tmp/project/
                clone: yes
